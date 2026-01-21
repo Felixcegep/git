@@ -43,6 +43,12 @@
 #include "commit-graph.h"
 #include "pretty.h"
 #include "trailer.h"
+#include "log-tree.h"
+#include "refs.h"
+#include "hex.h"
+#include "path.h"
+#include "date.h"
+#include <time.h>
 
 static const char * const builtin_commit_usage[] = {
 	N_("git commit [-a | --interactive | --patch] [-s] [-v] [-u[<mode>]] [--amend]\n"
@@ -1693,6 +1699,83 @@ static int git_commit_config(const char *k, const char *v,
 
 	return git_status_config(k, v, ctx, s);
 }
+// hereee
+static void csv_escape(struct strbuf *out, const char *str)
+{
+	strbuf_addch(out, '"');
+	while (str && *str) {
+		if (*str == '"')
+			strbuf_addstr(out, "\"\"");
+		else
+			strbuf_addch(out, *str);
+		str++;
+	}
+	strbuf_addch(out, '"');
+}
+
+static void log_commit_to_csv(const struct object_id *oid, const char *author, const char *msg)
+{
+	FILE *fp;
+	struct strbuf diff_sb = STRBUF_INIT;
+	struct strbuf csv_line = STRBUF_INIT;
+	struct rev_info rev;
+	struct commit *commit;
+	const char *timestamp;
+	const char *branch;
+	char *temp_file;
+
+	timestamp = show_date(time(NULL), 0, DATE_MODE(ISO8601));
+
+	branch = refs_resolve_ref_unsafe(get_main_ref_store(the_repository), "HEAD", 0, NULL, NULL);
+	if (branch && starts_with(branch, "refs/heads/"))
+		branch += 11;
+	else
+		branch = "HEAD (detached)";
+
+	commit = lookup_commit_reference(the_repository, oid);
+	if (!commit || repo_parse_commit(the_repository, commit))
+		return;
+
+	temp_file = repo_git_path(the_repository, "commit_diff_temp.txt");
+	repo_init_revisions(the_repository, &rev, NULL);
+	rev.diff = 1;
+	rev.show_root_diff = 1;
+	rev.diffopt.output_format = DIFF_FORMAT_PATCH;
+	rev.no_commit_id = 1;
+	diff_setup_done(&rev.diffopt);
+	rev.diffopt.file = fopen(temp_file, "w");
+	if (rev.diffopt.file) {
+		rev.diffopt.close_file = 1;
+		log_tree_commit(&rev, commit);
+	}
+
+	if (strbuf_read_file(&diff_sb, temp_file, 0) < 0) {
+		/* Failed to read diff, but we can still log other info */
+	}
+	unlink(temp_file);
+	free(temp_file);
+
+	/* CSV format: time, oid, branch, author, message, diff */
+	strbuf_addf(&csv_line, "%s,", timestamp);
+	strbuf_addf(&csv_line, "%s,", oid_to_hex(oid));
+	csv_escape(&csv_line, branch);
+	strbuf_addch(&csv_line, ',');
+	csv_escape(&csv_line, author);
+	strbuf_addch(&csv_line, ',');
+	csv_escape(&csv_line, msg);
+	strbuf_addch(&csv_line, ',');
+	csv_escape(&csv_line, diff_sb.buf);
+	strbuf_addch(&csv_line, '\n');
+
+	fp = fopen("C:/Users/fella/Documents/TheArchive/data/commit_history.csv", "a");
+	if (fp) {
+		fputs(csv_line.buf, fp);
+		fclose(fp);
+	}
+
+	strbuf_release(&diff_sb);
+	strbuf_release(&csv_line);
+}
 
 int cmd_commit(int argc,
 	       const char **argv,
@@ -1963,6 +2046,9 @@ int cmd_commit(int argc,
 	if (amend && !no_post_rewrite) {
 		commit_post_rewrite(the_repository, current_head, &oid);
 	}
+
+	log_commit_to_csv(&oid, author_ident.buf, sb.buf);
+
 	if (!quiet) {
 		unsigned int flags = 0;
 

@@ -258,3 +258,9 @@ Release/
 /contrib/buildsystems/out
 /contrib/libgit-rs/target
 /contrib/libgit-sys/target
+/build/
+test_repo*
+testrepo*
+test-repo*
+test[0-9]*
+test_*

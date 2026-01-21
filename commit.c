@@ -28,6 +28,8 @@
 #include "shallow.h"
 #include "tree.h"
 #include "hook.h"
+#include "log-tree.h"
+#include "revision.h"
 #include "parse.h"
 #include "object-file.h"
 #include "object-file-convert.h"
@@ -1709,6 +1711,8 @@ static void write_commit_tree(struct strbuf *buffer, const char *msg, size_t msg
 	/* And add the comment */
 	strbuf_add(buffer, msg, msg_len);
 }
+
+
 
 int commit_tree_extended(const char *msg, size_t msg_len,
 			 const struct object_id *tree,
